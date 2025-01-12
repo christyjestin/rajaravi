@@ -2,12 +2,14 @@ import bisect
 import numpy as np
 from heapq import *
 from tqdm import trange, tqdm
+from numba import njit
 
-
+@njit
 def weighted_average(color1: np.ndarray, color2: np.ndarray, count1: int, count2: int):
     alpha = count1 / (count1 + count2)
     return color1 * alpha + color2 * (1 - alpha)
 
+@njit
 def dist(a: np.ndarray, b: np.ndarray):
     # divide before computing norm to avoid numerical overflow
     return np.linalg.norm((a - b) / 256) * 256
@@ -16,6 +18,7 @@ def dist(a: np.ndarray, b: np.ndarray):
 # helper function for maintaining i < j invariant
 def reorder_pair(a, b):
     return (a, b) if a < b else (b, a)
+
 
 class Patches:
     def __init__(self, img) -> None:
@@ -27,7 +30,7 @@ class Patches:
 
         # all of these data structures have the patch id as the key/index
         self.patch_counts = {i: 1 for i in range(num_patches)}
-        self.patch_colors = img.reshape((-1, 3)).astype(np.float16)
+        self.patch_colors = img.reshape((-1, 3)).astype(np.float32)
         # vals are n x 2 arrays
         self.patch_indices = {i * self.width + j: np.array([[i, j]]) for i in range(self.height) 
                               for j in range(self.width)}
@@ -110,7 +113,6 @@ class Patches:
     # finds the closest n% pairs of adjacent patches to merge
     # returns the entire heap i.e. a list of items of the form (neg_dist, (i, j))
     def cull_by_fraction(self, cull_fraction):
-        print(cull_fraction)
         cull_count = round(cull_fraction * self.num_patches)
 
         heap = []
@@ -143,7 +145,7 @@ class Patches:
         cull_target = 2000
         round = 0
         initial = self.num_patches
-        t = tqdm(total=initial - cull_target, desc="Merging patches:", miniters=1)
+        t = tqdm(total=initial - cull_target, desc="Bulk merging patches", miniters=1)
         while self.num_patches > cull_target:
             # run through the merges
             cull_fraction = 0.8 if self.num_patches > 100000 else 0.5
@@ -171,7 +173,7 @@ class Patches:
         self.queue = [(neg_dist, *pair, self.num_patches) for pair, neg_dist in self.neg_dists.items()]
         self.queue.sort()
 
-        for _ in trange(self.num_patches - 1):
+        for _ in trange(self.num_patches - 1, desc="Single merging patches"):
             # pop until you find a valid pair
             while True:
                 _, i, j, last_update = self.queue.pop()
