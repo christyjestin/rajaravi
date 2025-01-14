@@ -2,22 +2,35 @@ import bisect
 import numpy as np
 from heapq import *
 from tqdm import trange, tqdm
+from typing import Set
 from numba import njit
 
 @njit
-def weighted_average(color1: np.ndarray, color2: np.ndarray, count1: int, count2: int):
+def weighted_average(color1: np.ndarray, color2: np.ndarray, count1: int, count2: int) -> np.ndarray:
     alpha = count1 / (count1 + count2)
     return color1 * alpha + color2 * (1 - alpha)
 
 @njit
-def dist(a: np.ndarray, b: np.ndarray):
+def dist(a: np.ndarray, b: np.ndarray) -> float:
     # divide before computing norm to avoid numerical overflow
     return np.linalg.norm((a - b) / 256) * 256
 
 # return pair such that the first element is the lesser of the two
 # helper function for maintaining i < j invariant
+@njit
 def reorder_pair(a, b):
     return (a, b) if a < b else (b, a)
+
+# given a (row first) array index, return the set of adjacent patches
+@njit
+def get_adjacencies(i: int, width: int, height: int) -> Set[int]:
+    r, c = i // width, i % width
+    adj = set()
+    if r > 0: adj.add(i - width) # patch above
+    if r + 1 < height: adj.add(i + width) # patch below
+    if c > 0: adj.add(i - 1) # patch to the left
+    if c + 1 < width: adj.add(i + 1) # patch to the right
+    return adj
 
 
 class Patches:
@@ -62,13 +75,7 @@ class Patches:
 
     # given a (row first) array index, return the set of adjacent patches
     def get_adjacencies(self, i):
-        r, c = i // self.width, i % self.width
-        adj = set()
-        if r > 0: adj.add(i - self.width) # patch above
-        if r + 1 < self.height: adj.add(i + self.width) # patch below
-        if c > 0: adj.add(i - 1) # patch to the left
-        if c + 1 < self.width: adj.add(i + 1) # patch to the right
-        return adj
+        return get_adjacencies(i, self.width, self.height)
 
     # merge while keeping set i and deleting j
     # N.B. this method does not compute neg_dists; it's done later to avoid recomputes
@@ -164,6 +171,7 @@ class Patches:
         # Phase 2: Merge one pair of patches at a time
         # setup queue for single merges
         # we use the number of patches as a timestamp
+        save_frequency = 40
         self.patch_last_update = {p: self.num_patches for p in self.existing_patches}
         self.neg_dists = dict()
         for i in tqdm(self.existing_patches, desc = "Recomputing cache"):
@@ -188,11 +196,8 @@ class Patches:
             for new_j in self.patch_adjacencies[i]:
                 dist = self.compute_neg_dist(i, new_j)
                 bisect.insort(self.queue, (dist, *reorder_pair(i, new_j), self.num_patches))
-            if self.num_patches % 100 == 0:
+            if self.num_patches % save_frequency == 0:
                 output.append((self.num_patches, self.construct_img()))
 
         self.patch_process = output
         return output
-
-    def post_process(self):
-        pass
