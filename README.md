@@ -1,5 +1,7 @@
 # RajaRavi
 
+### Spilling the beans: scroll down to see the images
+
 This is an image processing project inspired by the idea that paintings simplify the reference material: reducing colors and refining shapes. To do this, I used a hierarchical agglomerative clustering algorithm. In this algorithm, you start with one cluster for every data point and then progressively combine the two closest clusters (based on some metric) until you're left with a single cluster that contains all of the data. The big upside of this approach is that you don't have a predetermined number of clusters, and you can stop the agglomeration at any point when you think the clusters look reasonable. This algorithm is also able to represent some cluster shapes that aren't possible with algorithms like k-means or k-mediods. Roughly these are shapes where data points are close to some other point in the cluster but not necessarily close to the average (either mean or medioid) of the cluster. A good example is an S shape. I thought that this would make the agglomerative algorithm a good fit for paintings.
 
 In the image case, our data points are pixels, and our clusters are groups of pixels (which I call **patches**). Additionally, we only consider combining neighboring patches.
